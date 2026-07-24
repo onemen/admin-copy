@@ -42,7 +42,7 @@ static int can_write_to(const WCHAR *dst_path) {
         return 0;
 
     WCHAR test[MAX_PATH];
-    swprintf(test, MAX_PATH, L"%s\\__wtest_%08lx.tmp", dir, GetCurrentProcessId());
+    wsprintfW(test, L"%s\\__wtest_%08lx.tmp", dir, GetCurrentProcessId());
     free(dir);
 
     HANDLE h = CreateFileW(test, GENERIC_WRITE, 0, NULL,
