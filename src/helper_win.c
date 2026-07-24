@@ -56,12 +56,18 @@ static int can_write_to(const WCHAR *dst_path) {
 }
 
 static WCHAR *make_extended_path(const WCHAR *path) {
+    size_t len = wcslen(path);
+
+    // Short paths pass through as-is to avoid \\?\ issues with 8.3 short names.
+    // Only use extended-length prefix when path is near MAX_PATH.
+    if (len < MAX_PATH - 10)
+        return _wcsdup(path);
+
     if (wcsncmp(path, L"\\\\?\\", 4) == 0)
         return _wcsdup(path);
 
     if (wcsncmp(path, L"\\\\", 2) == 0) {
-        size_t len = wcslen(path) + 8;
-        WCHAR *ext = (WCHAR *)malloc(len * sizeof(WCHAR));
+        WCHAR *ext = (WCHAR *)malloc((len + 8) * sizeof(WCHAR));
         if (!ext) return NULL;
         wcscpy(ext, L"\\\\?\\UNC\\");
         wcscat(ext, path + 2);
@@ -69,8 +75,7 @@ static WCHAR *make_extended_path(const WCHAR *path) {
     }
 
     if (path[0] && path[1] == L':') {
-        size_t len = wcslen(path) + 5;
-        WCHAR *ext = (WCHAR *)malloc(len * sizeof(WCHAR));
+        WCHAR *ext = (WCHAR *)malloc((len + 5) * sizeof(WCHAR));
         if (!ext) return NULL;
         wcscpy(ext, L"\\\\?\\");
         wcscat(ext, path);
