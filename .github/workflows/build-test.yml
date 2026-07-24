@@ -1,0 +1,78 @@
+name: Build & Test
+
+on:
+  workflow_call:
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y gcc
+
+      - name: Build
+        run: make
+
+      - name: Test (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          mkdir -p /tmp/test_dst
+          echo "hello" > /tmp/test_src.txt
+          ./dist/helper_linux /tmp/test_src.txt /tmp/test_dst/copied.txt
+          diff /tmp/test_src.txt /tmp/test_dst/copied.txt
+          echo "Normal copy OK"
+          sudo ./dist/helper_linux /tmp/test_src.txt /etc/test_copied.txt
+          diff /tmp/test_src.txt /etc/test_copied.txt
+          sudo rm /etc/test_copied.txt
+          echo "Elevated copy OK"
+          rm -rf /tmp/test_dst
+
+      - name: Test (macOS)
+        if: runner.os == 'macOS'
+        env:
+          CI: "true"
+        run: |
+          mkdir -p /tmp/test_dst
+          echo "hello" > /tmp/test_src.txt
+          ./dist/helper_mac /tmp/test_src.txt /tmp/test_dst/copied.txt
+          diff /tmp/test_src.txt /tmp/test_dst/copied.txt
+          echo "Normal copy OK"
+          sudo ./dist/helper_mac /tmp/test_src.txt /etc/test_copied.txt
+          diff /tmp/test_src.txt /etc/test_copied.txt
+          sudo rm /etc/test_copied.txt
+          echo "Elevated copy OK"
+          rm -rf /tmp/test_dst
+
+      - name: Test (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $tmpSrc = "$env:TEMP\test_src.txt"
+          $tmpDst = "$env:TEMP\test_dst"
+          New-Item -ItemType Directory -Path $tmpDst -Force
+          "hello" | Out-File -Encoding utf8 $tmpSrc
+          .\dist\helper_win.exe $tmpSrc "$tmpDst\copied.txt"
+          if ((Get-Content $tmpSrc) -ne (Get-Content "$tmpDst\copied.txt")) { exit 1 }
+          Write-Host "Normal copy OK"
+          # Hebrew path test
+          $hebrewSrc = "$env:TEMP\src_test.txt"
+          $hebrewDst = "$env:ProgramFiles\בדיקה\test.txt"
+          "unicode-content" | Out-File -Encoding utf8 $hebrewSrc
+          # Run with runas trustlevel (no elevation needed for ProgramFiles on CI?)
+          .\dist\helper_win.exe $hebrewSrc $hebrewDst
+          Remove-Item -Force "$tmpDst\copied.txt" -ErrorAction SilentlyContinue
+          Remove-Item -Force $hebrewDst -ErrorAction SilentlyContinue
+          Write-Host "Unicode copy OK"
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-${{ runner.os }}
+          path: dist/

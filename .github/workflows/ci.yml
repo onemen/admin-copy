@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-test:
+    uses: ./.github/workflows/build-test.yml
+
+  upload-dev-build:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: build-test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: build-*
+          merge-multiple: true
+
+      - name: Upload to dev-build release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          REPO="${{ github.repository }}"
+          # Create dev-build release if not exists
+          gh release view dev-build --repo "$REPO" 2>/dev/null || \
+            gh release create dev-build --repo "$REPO" --title "Dev Build" --prerelease
+
+          # Upload binaries with --clobber to replace old assets
+          for f in dist/*; do
+            gh release upload dev-build --repo "$REPO" "$f" --clobber
+          done
+
+  upload-pr-artifacts:
+    if: github.event_name == 'pull_request'
+    needs: build-test
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: build-*
+          merge-multiple: true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pr-builds
+          path: dist/

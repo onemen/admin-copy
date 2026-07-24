@@ -1,0 +1,52 @@
+name: Manual Asset Build
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y gcc
+
+      - name: Build
+        run: make
+
+      - name: Determine naming
+        id: naming
+        shell: bash
+        run: |
+          TAG=$(git describe --tags --always 2>/dev/null || echo "manual")
+          SHA=$(git rev-parse --short HEAD)
+          case "${{ runner.os }}" in
+            Windows) PLAT="win" ;;
+            Linux)   PLAT="linux" ;;
+            macOS)   PLAT="mac" ;;
+          esac
+          echo "ASSET_NAME=helper_${PLAT}-${TAG}-${SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Rename assets
+        shell: bash
+        run: |
+          PLATFORM_ASSETS=$(ls dist/* 2>/dev/null || true)
+          for f in $PLATFORM_ASSETS; do
+            ext="${f##*.}"
+            if [ "$ext" = "exe" ]; then
+              mv "$f" "dist/${{ steps.naming.outputs.ASSET_NAME }}.$ext"
+            else
+              mv "$f" "dist/${{ steps.naming.outputs.ASSET_NAME }}"
+            fi
+          done
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: asset-${{ runner.os }}
+          path: dist/*
