@@ -29,10 +29,10 @@ dist/helper_win.exe: src/helper_win.c src/version.rc | dist
 	$(CC) src/helper_win.c src/version.res -o dist/helper_win.exe $(CFLAGS) -static -static-libgcc -luser32 -lshell32 "-Wl,--gc-sections" "-Wl,--strip-all" "-Wl,--subsystem,windows"
 
 dist/helper_linux: src/helper_linux.c src/common_posix.c | dist
-	$(CC) src/helper_linux.c src/common_posix.c -o dist/helper_linux $(CFLAGS) -static -static-libgcc
+	$(CC) src/helper_linux.c src/common_posix.c -o dist/helper_linux $(CFLAGS)
 
 dist/helper_mac: src/helper_mac.c src/common_posix.c src/Info.plist | dist
-	clang src/helper_mac.c src/common_posix.c -o dist/helper_mac $(CFLAGS) -framework CoreFoundation -Wl,-sectcreate,__TEXT,__info_plist,src/Info.plist
+	clang src/helper_mac.c src/common_posix.c -o dist/helper_mac $(CFLAGS) -framework CoreFoundation -Wl,-dead_strip -Wl,-sectcreate,__TEXT,__info_plist,src/Info.plist
 
 clean:
 	rm -f dist/helper_win.exe dist/helper_linux dist/helper_mac
