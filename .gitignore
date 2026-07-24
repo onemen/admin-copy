@@ -1,2 +1,21 @@
+# Output directory
+/dist
+
+# Object files
+*.o
+*.obj
+
+# Executables outside dist
+*.exe
+
+# IDEs
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Agents & opencode config (local dev)
 .agents
 .opencode
