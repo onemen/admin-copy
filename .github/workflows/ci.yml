@@ -46,6 +46,16 @@ jobs:
             [ -f "$f" ] && gh release upload dev-build --repo "$REPO" "$f" --clobber
           done
 
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Move dev-build tag to HEAD
+        run: |
+          git tag -d dev-build 2>/dev/null || true
+          git tag dev-build HEAD
+          git push origin -f dev-build
+
   upload-pr-artifacts:
     if: github.event_name == 'pull_request'
     needs: build-test
