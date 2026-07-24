@@ -20,21 +20,30 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          pattern: build-*
-          merge-multiple: true
+          name: build-Windows
+          path: dist/
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: build-Linux
+          path: dist/
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: build-macOS
+          path: dist/
 
       - name: Upload to dev-build release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           REPO="${{ github.repository }}"
-          # Create dev-build release if not exists
           gh release view dev-build --repo "$REPO" 2>/dev/null || \
             gh release create dev-build --repo "$REPO" --title "Dev Build" --prerelease
 
-          # Upload binaries with --clobber to replace old assets
+          ls -la dist/
           for f in dist/*; do
-            gh release upload dev-build --repo "$REPO" "$f" --clobber
+            [ -f "$f" ] && gh release upload dev-build --repo "$REPO" "$f" --clobber
           done
 
   upload-pr-artifacts:
@@ -45,8 +54,18 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          pattern: build-*
-          merge-multiple: true
+          name: build-Windows
+          path: dist/
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: build-Linux
+          path: dist/
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: build-macOS
+          path: dist/
 
       - uses: actions/upload-artifact@v4
         with:

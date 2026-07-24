@@ -20,8 +20,18 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
-          pattern: build-*
-          merge-multiple: true
+          name: build-Windows
+          path: dist/
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: build-Linux
+          path: dist/
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: build-macOS
+          path: dist/
 
       - name: Create Release
         env:
@@ -33,5 +43,5 @@ jobs:
           gh release create "$TAG" --repo "$REPO" --title "$TAG" --generate-notes
 
           for f in dist/*; do
-            gh release upload "$TAG" --repo "$REPO" "$f"
+            [ -f "$f" ] && gh release upload "$TAG" --repo "$REPO" "$f"
           done
