@@ -5,11 +5,21 @@ ifdef DEBUG
   CFLAGS = -g -O0
 endif
 
-UNAME_S := $(shell uname -s 2>nul || echo Windows)
-
 .PHONY: all clean
 
-all: dist/helper_win.exe dist/helper_linux dist/helper_mac
+ifeq ($(OS),Windows_NT)
+  TARGET = dist/helper_win.exe
+else
+  UNAME_S := $(shell uname -s)
+  ifeq ($(UNAME_S),Linux)
+    TARGET = dist/helper_linux
+  endif
+  ifeq ($(UNAME_S),Darwin)
+    TARGET = dist/helper_mac
+  endif
+endif
+
+all: $(TARGET)
 
 dist:
 	@mkdir -p dist
@@ -25,6 +35,3 @@ dist/helper_mac: src/helper_mac.c src/common_posix.c | dist
 
 clean:
 	rm -f dist/helper_win.exe dist/helper_linux dist/helper_mac
-	@if exist dist\helper_win.exe del /q dist\helper_win.exe 2>nul
-	@if exist dist\helper_linux del /q dist\helper_linux 2>nul
-	@if exist dist\helper_mac del /q dist\helper_mac 2>nul
