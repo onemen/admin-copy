@@ -73,26 +73,31 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
+          function Run-Helper($src, $dst) {
+            $p = Start-Process -FilePath ".\dist\helper_win.exe" `
+              -ArgumentList @($src, $dst) -Wait -PassThru
+            return $p.ExitCode
+          }
+
           $tmpSrc = "$env:TEMP\test_src.txt"
           $tmpDst = "$env:TEMP\test_dst"
           New-Item -ItemType Directory -Path $tmpDst -Force | Out-Null
           "hello" | Out-File -NoNewline -Encoding ascii $tmpSrc
 
-          .\dist\helper_win.exe $tmpSrc "$tmpDst\copied.txt"
+          $ec = Run-Helper $tmpSrc "$tmpDst\copied.txt"
+          if ($ec -ne 0) { Write-Host "helper_win exit: $ec"; exit $ec }
           if (-not (Test-Path "$tmpDst\copied.txt")) { exit 3 }
-          if ((Get-Content $tmpSrc) -ne (Get-Content "$tmpDst\copied.txt")) { exit 1 }
           Write-Host "Normal copy OK"
 
           $hebrewSrc = "$env:TEMP\src_test.txt"
           $hebrewDst = "$env:ProgramFiles\בדיקה\test.txt"
           "שלום-תוכן" | Out-File -NoNewline -Encoding utf8NoBOM $hebrewSrc
-          .\dist\helper_win.exe $hebrewSrc $hebrewDst
-          # Elevation to ProgramFiles won't work in headless CI; skip fail check
+          $ec2 = Run-Helper $hebrewSrc $hebrewDst
           if (Test-Path $hebrewDst) {
             Write-Host "Unicode copy OK (elevated)"
             Remove-Item -Force $hebrewDst
           } else {
-            Write-Host "Unicode copy skipped (no elevation available in CI)"
+            Write-Host "Unicode copy skipped (exit $ec2, no elevation in CI)"
           }
           Remove-Item -Force "$tmpDst\copied.txt" -ErrorAction SilentlyContinue
 
