@@ -41,25 +41,32 @@ int main(int argc, char *argv[]) {
             execvp("sudo", args);
             free(args);
         } else {
-            size_t total = 0;
-            for (int i = 1; i < argc; i++)
-                total += strlen(argv[i]) + 3;
-            char *cmdline = malloc(total + 1);
-            if (!cmdline)
+            char shell_cmd[6144];
+            int n = snprintf(shell_cmd, sizeof(shell_cmd), "\"%s\"", exe_path);
+            if (n < 0 || (size_t)n >= sizeof(shell_cmd))
                 return EXIT_ELEV_FAIL;
-            cmdline[0] = 0;
             for (int i = 1; i < argc; i++) {
-                if (i > 1) strcat(cmdline, " ");
-                strcat(cmdline, "\"");
-                strcat(cmdline, argv[i]);
-                strcat(cmdline, "\"");
+                size_t len = strlen(shell_cmd);
+                n = snprintf(shell_cmd + len, sizeof(shell_cmd) - len,
+                             " \"%s\"", argv[i]);
+                if (n < 0 || (size_t)n >= sizeof(shell_cmd) - len)
+                    return EXIT_ELEV_FAIL;
             }
 
             char script[8192];
-            snprintf(script, sizeof(script),
-                     "do shell script \"\\\"%s\\\" %s\" with administrator privileges",
-                     exe_path, cmdline);
-            free(cmdline);
+            size_t pos = 0;
+            char *prefix = "do shell script \"";
+            while (*prefix && pos < sizeof(script) - 1)
+                script[pos++] = *prefix++;
+            for (char *s = shell_cmd; *s && pos < sizeof(script) - 2; s++) {
+                if (*s == '"')
+                    script[pos++] = '\\';
+                script[pos++] = *s;
+            }
+            char *suffix = "\" with administrator privileges";
+            while (*suffix && pos < sizeof(script) - 1)
+                script[pos++] = *suffix++;
+            script[pos] = 0;
 
             char *osargs[] = { "osascript", "-e", script, NULL };
             execvp("osascript", osargs);
