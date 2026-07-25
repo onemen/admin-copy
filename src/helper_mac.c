@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 #include <copyfile.h>
 #include <mach-o/dyld.h>
 #include <errno.h>
@@ -40,11 +41,36 @@ int main(int argc, char *argv[]) {
             execvp("sudo", args);
             free(args);
         } else {
+            int pair_count = (argc - 1) / 2;
+            char **tmp_paths = calloc((size_t)pair_count, sizeof(char *));
+            if (!tmp_paths)
+                return EXIT_ELEV_FAIL;
+
             char shell_cmd[7168];
             size_t sc_pos = 0;
-            for (int i = 1; i < argc; i += 2) {
+            pid_t pid = getpid();
+
+            for (int i = 1, idx = 0; i < argc; i += 2, idx++) {
                 const char *src = argv[i];
                 const char *dst = argv[i + 1];
+
+                char tmp_path[64];
+                snprintf(tmp_path, sizeof(tmp_path),
+                         "/tmp/helper_mac_%d_%d", (int)pid, idx);
+
+                if (copyfile(src, tmp_path, 0, COPYFILE_DATA) < 0) {
+                    for (int j = 0; j < idx; j++)
+                        if (tmp_paths[j]) remove(tmp_paths[j]);
+                    free(tmp_paths);
+                    return EXIT_COPY_FAIL;
+                }
+                tmp_paths[idx] = strdup(tmp_path);
+                if (!tmp_paths[idx]) {
+                    for (int j = 0; j < idx; j++)
+                        if (tmp_paths[j]) remove(tmp_paths[j]);
+                    free(tmp_paths);
+                    return EXIT_ELEV_FAIL;
+                }
 
                 if (sc_pos > 0) {
                     shell_cmd[sc_pos++] = ' ';
@@ -56,28 +82,34 @@ int main(int argc, char *argv[]) {
                 const char *p = dst + strlen(dst);
                 while (p > dst && p[-1] != '/')
                     p--;
-                char dirbuf[4096];
-                if (p > dst) {
-                    size_t dlen = (size_t)(p - dst);
-                    if (dlen >= sizeof(dirbuf))
-                        return EXIT_COPY_FAIL;
-                    memcpy(dirbuf, dst, dlen);
-                    dirbuf[dlen] = 0;
-                }
 
                 int n;
                 if (p > dst) {
+                    char dirbuf[4096];
+                    size_t dlen = (size_t)(p - dst);
+                    if (dlen >= sizeof(dirbuf)) {
+                        for (int j = 0; j <= idx; j++)
+                            if (tmp_paths[j]) { remove(tmp_paths[j]); free(tmp_paths[j]); }
+                        free(tmp_paths);
+                        return EXIT_ELEV_FAIL;
+                    }
+                    memcpy(dirbuf, dst, dlen);
+                    dirbuf[dlen] = 0;
                     n = snprintf(shell_cmd + sc_pos,
                                  sizeof(shell_cmd) - sc_pos,
-                                 "mkdir -p \"%s\" && cp -p \"%s\" \"%s\"",
-                                 dirbuf, src, dst);
+                                 "mkdir -p \"%s\" && cp \"%s\" \"%s\"",
+                                 dirbuf, tmp_path, dst);
                 } else {
                     n = snprintf(shell_cmd + sc_pos,
                                  sizeof(shell_cmd) - sc_pos,
-                                 "cp -p \"%s\" \"%s\"", src, dst);
+                                 "cp \"%s\" \"%s\"", tmp_path, dst);
                 }
-                if (n < 0 || (size_t)n >= sizeof(shell_cmd) - sc_pos)
+                if (n < 0 || (size_t)n >= sizeof(shell_cmd) - sc_pos) {
+                    for (int j = 0; j <= idx; j++)
+                        if (tmp_paths[j]) { remove(tmp_paths[j]); free(tmp_paths[j]); }
+                    free(tmp_paths);
                     return EXIT_ELEV_FAIL;
+                }
                 sc_pos += (size_t)n;
             }
 
@@ -97,7 +129,24 @@ int main(int argc, char *argv[]) {
             script[pos] = 0;
 
             char *osargs[] = { "osascript", "-e", script, NULL };
-            execvp("osascript", osargs);
+            pid_t child = fork();
+            if (child == 0) {
+                execvp("osascript", osargs);
+                _exit(EXIT_ELEV_FAIL);
+            }
+            int status;
+            waitpid(child, &status, 0);
+            int ec = WIFEXITED(status) ? WEXITSTATUS(status) : EXIT_ELEV_FAIL;
+
+            for (int j = 0; j < pair_count; j++) {
+                if (tmp_paths[j]) {
+                    remove(tmp_paths[j]);
+                    free(tmp_paths[j]);
+                }
+            }
+            free(tmp_paths);
+
+            return ec;
         }
 
         return EXIT_ELEV_FAIL;
