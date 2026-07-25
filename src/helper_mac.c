@@ -82,7 +82,8 @@ int main(int argc, char *argv[]) {
                 return EXIT_COPY_FAIL;
             memcpy(dir, dst, dlen);
             dir[dlen] = 0;
-            mkdir_p(dir, 0755);
+            if (mkdir_p(dir, 0755) < 0)
+                return EXIT_COPY_FAIL;
         }
 
         if (copyfile(argv[i], dst, 0, COPYFILE_ALL) < 0)

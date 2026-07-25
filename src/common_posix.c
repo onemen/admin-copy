@@ -2,6 +2,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#include <errno.h>
 
 int mkdir_p(const char *path, mode_t mode) {
     char tmp[4096];
@@ -18,7 +19,10 @@ int mkdir_p(const char *path, mode_t mode) {
             tmp[i] = '/';
         }
     }
-    return mkdir(tmp, mode);
+
+    if (mkdir(tmp, mode) == 0)
+        return 0;
+    return (errno == EEXIST) ? 0 : -1;
 }
 
 int can_write_to(const char *dst_path) {
@@ -35,6 +39,9 @@ int can_write_to(const char *dst_path) {
         return 0;
     memcpy(dir, dst_path, dlen);
     dir[dlen] = 0;
+
+    if (access(dir, F_OK) != 0)
+        return 1;
 
     return access(dir, W_OK) == 0;
 }

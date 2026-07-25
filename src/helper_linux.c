@@ -6,7 +6,6 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <sys/sendfile.h>
 #include <fcntl.h>
 #include <errno.h>
 
@@ -15,25 +14,30 @@ static int copy_file(const char *src, const char *dst) {
     if (in_fd < 0)
         return -1;
 
-    struct stat st;
-    if (fstat(in_fd, &st) < 0) {
-        close(in_fd);
-        return -1;
-    }
-
     int out_fd = open(dst, O_WRONLY | O_CREAT | O_TRUNC, 0644);
     if (out_fd < 0) {
         close(in_fd);
         return -1;
     }
 
-    off_t offset = 0;
-    ssize_t sent = sendfile(out_fd, in_fd, &offset, st.st_size);
-    int ret = (sent == st.st_size) ? 0 : -1;
+    char buf[65536];
+    ssize_t n;
+    while ((n = read(in_fd, buf, sizeof(buf))) > 0) {
+        ssize_t written = 0;
+        while (written < n) {
+            ssize_t r = write(out_fd, buf + written, (size_t)(n - written));
+            if (r <= 0) {
+                close(in_fd);
+                close(out_fd);
+                return -1;
+            }
+            written += r;
+        }
+    }
 
     close(in_fd);
     close(out_fd);
-    return ret;
+    return (n == 0) ? 0 : -1;
 }
 
 int main(int argc, char *argv[]) {
@@ -85,7 +89,8 @@ int main(int argc, char *argv[]) {
                 return EXIT_COPY_FAIL;
             memcpy(dir, dst, dlen);
             dir[dlen] = 0;
-            mkdir_p(dir, 0755);
+            if (mkdir_p(dir, 0755) < 0)
+                return EXIT_COPY_FAIL;
         }
 
         if (copy_file(argv[i], dst) < 0)
