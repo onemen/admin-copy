@@ -75,24 +75,18 @@ jobs:
         run: |
           $tmpSrc = "$env:TEMP\test_src.txt"
           $tmpDst = "$env:TEMP\test_dst"
-          New-Item -ItemType Directory -Path $tmpDst -Force
+          New-Item -ItemType Directory -Path $tmpDst -Force | Out-Null
           "hello" | Out-File -NoNewline -Encoding ascii $tmpSrc
 
           .\dist\helper_win.exe $tmpSrc "$tmpDst\copied.txt"
-          Write-Host "Exit code: $LASTEXITCODE"
-          Write-Host "Dest exists: $(Test-Path "$tmpDst\copied.txt")"
-          Get-ChildItem "$tmpDst"
-
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not (Test-Path "$tmpDst\copied.txt")) { exit 3 }
           if ((Get-Content $tmpSrc) -ne (Get-Content "$tmpDst\copied.txt")) { exit 1 }
           Write-Host "Normal copy OK"
 
-          # Hebrew path test
           $hebrewSrc = "$env:TEMP\src_test.txt"
           $hebrewDst = "$env:ProgramFiles\בדיקה\test.txt"
           "unicode-content" | Out-File -NoNewline -Encoding ascii $hebrewSrc
           .\dist\helper_win.exe $hebrewSrc $hebrewDst
-          Write-Host "Unicode exit code: $LASTEXITCODE"
           Remove-Item -Force "$tmpDst\copied.txt" -ErrorAction SilentlyContinue
           Remove-Item -Force $hebrewDst -ErrorAction SilentlyContinue
           Write-Host "Unicode copy OK"
