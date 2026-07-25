@@ -22,14 +22,13 @@ int main(int argc, char *argv[]) {
     }
 
     if (geteuid() != 0 && needs_elevation) {
-        char exe_path[4096];
-        uint32_t esize = sizeof(exe_path);
-        if (_NSGetExecutablePath(exe_path, &esize) < 0)
-            return EXIT_ELEV_FAIL;
-
         int use_sudo = getenv("CI") != NULL || getenv("GITHUB_ACTIONS") != NULL;
 
         if (use_sudo) {
+            char exe_path[4096];
+            uint32_t esize = sizeof(exe_path);
+            if (_NSGetExecutablePath(exe_path, &esize) < 0)
+                return EXIT_ELEV_FAIL;
             char **args = malloc((size_t)(argc + 2) * sizeof(char *));
             if (!args)
                 return EXIT_ELEV_FAIL;
@@ -41,16 +40,45 @@ int main(int argc, char *argv[]) {
             execvp("sudo", args);
             free(args);
         } else {
-            char shell_cmd[6144];
-            int n = snprintf(shell_cmd, sizeof(shell_cmd), "\"%s\"", exe_path);
-            if (n < 0 || (size_t)n >= sizeof(shell_cmd))
-                return EXIT_ELEV_FAIL;
-            for (int i = 1; i < argc; i++) {
-                size_t len = strlen(shell_cmd);
-                n = snprintf(shell_cmd + len, sizeof(shell_cmd) - len,
-                             " \"%s\"", argv[i]);
-                if (n < 0 || (size_t)n >= sizeof(shell_cmd) - len)
+            char shell_cmd[7168];
+            size_t sc_pos = 0;
+            for (int i = 1; i < argc; i += 2) {
+                const char *src = argv[i];
+                const char *dst = argv[i + 1];
+
+                if (sc_pos > 0) {
+                    shell_cmd[sc_pos++] = ' ';
+                    shell_cmd[sc_pos++] = '&';
+                    shell_cmd[sc_pos++] = '&';
+                    shell_cmd[sc_pos++] = ' ';
+                }
+
+                const char *p = dst + strlen(dst);
+                while (p > dst && p[-1] != '/')
+                    p--;
+                char dirbuf[4096];
+                if (p > dst) {
+                    size_t dlen = (size_t)(p - dst);
+                    if (dlen >= sizeof(dirbuf))
+                        return EXIT_COPY_FAIL;
+                    memcpy(dirbuf, dst, dlen);
+                    dirbuf[dlen] = 0;
+                }
+
+                int n;
+                if (p > dst) {
+                    n = snprintf(shell_cmd + sc_pos,
+                                 sizeof(shell_cmd) - sc_pos,
+                                 "mkdir -p \"%s\" && cp -p \"%s\" \"%s\"",
+                                 dirbuf, src, dst);
+                } else {
+                    n = snprintf(shell_cmd + sc_pos,
+                                 sizeof(shell_cmd) - sc_pos,
+                                 "cp -p \"%s\" \"%s\"", src, dst);
+                }
+                if (n < 0 || (size_t)n >= sizeof(shell_cmd) - sc_pos)
                     return EXIT_ELEV_FAIL;
+                sc_pos += (size_t)n;
             }
 
             char script[8192];
@@ -58,10 +86,10 @@ int main(int argc, char *argv[]) {
             char *prefix = "do shell script \"";
             while (*prefix && pos < sizeof(script) - 1)
                 script[pos++] = *prefix++;
-            for (char *s = shell_cmd; *s && pos < sizeof(script) - 2; s++) {
-                if (*s == '"')
+            for (size_t i = 0; i < sc_pos && pos < sizeof(script) - 2; i++) {
+                if (shell_cmd[i] == '"')
                     script[pos++] = '\\';
-                script[pos++] = *s;
+                script[pos++] = shell_cmd[i];
             }
             char *suffix = "\" with administrator privileges";
             while (*suffix && pos < sizeof(script) - 1)
