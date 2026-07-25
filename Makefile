@@ -32,7 +32,7 @@ dist/helper_linux: src/helper_linux.c src/common_posix.c | dist
 	$(CC) src/helper_linux.c src/common_posix.c -o dist/helper_linux $(CFLAGS)
 
 dist/helper_mac: src/helper_mac.c src/common_posix.c src/Info.plist | dist
-	clang src/helper_mac.c src/common_posix.c -o dist/helper_mac -Oz -s -flto -Wl,-dead_strip -Wl,-sectcreate,__TEXT,__info_plist,src/Info.plist
+	clang -arch x86_64 -arch arm64 src/helper_mac.c src/common_posix.c -o dist/helper_mac -Oz -s -flto -Wl,-dead_strip -Wl,-sectcreate,__TEXT,__info_plist,src/Info.plist
 
 clean:
 	rm -f dist/helper_win.exe dist/helper_linux dist/helper_mac
