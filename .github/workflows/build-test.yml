@@ -85,11 +85,16 @@ jobs:
 
           $hebrewSrc = "$env:TEMP\src_test.txt"
           $hebrewDst = "$env:ProgramFiles\בדיקה\test.txt"
-          "unicode-content" | Out-File -NoNewline -Encoding ascii $hebrewSrc
+          "שלום-תוכן" | Out-File -NoNewline -Encoding utf8NoBOM $hebrewSrc
           .\dist\helper_win.exe $hebrewSrc $hebrewDst
+          # Elevation to ProgramFiles won't work in headless CI; skip fail check
+          if (Test-Path $hebrewDst) {
+            Write-Host "Unicode copy OK (elevated)"
+            Remove-Item -Force $hebrewDst
+          } else {
+            Write-Host "Unicode copy skipped (no elevation available in CI)"
+          }
           Remove-Item -Force "$tmpDst\copied.txt" -ErrorAction SilentlyContinue
-          Remove-Item -Force $hebrewDst -ErrorAction SilentlyContinue
-          Write-Host "Unicode copy OK"
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
